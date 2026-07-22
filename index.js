@@ -25,15 +25,18 @@ async function isSubscribed(ctx, userId) {
   }
 }
 
-// Helper: Initialize User Profile
+// Helper: Initialize User Profile & Handle Referral Logic
 function initUser(id, referrerId = null) {
   if (!users[id]) {
     users[id] = {
       referrals: 0,
-      referredBy: referrerId,
+      referredBy: null,
       joinedDate: new Date().toLocaleDateString('en-US')
     };
-    if (referrerId && users[referrerId] && referrerId !== id) {
+
+    // Credit referrer only if it's a NEW user and not self-referral
+    if (referrerId && users[referrerId] && parseInt(referrerId) !== parseInt(id)) {
+      users[id].referredBy = referrerId;
       users[referrerId].referrals += 1;
     }
   }
@@ -55,11 +58,12 @@ const mainMenuKeyboard = Markup.keyboard([
 // /start Command
 bot.start(async (ctx) => {
   const userId = ctx.from.id;
-  const startPayload = ctx.payload;
+  const startPayload = ctx.payload; // Contains ref_12345
   const referrerId = startPayload && startPayload.startsWith('ref_') 
     ? parseInt(startPayload.replace('ref_', '')) 
     : null;
 
+  // Process referral logic
   initUser(userId, referrerId);
 
   // Check Force Join Status
@@ -103,7 +107,7 @@ ${isUnlocked
   : `🎯 <i>Invite <b>${remaining}</b> more friend(s) to unlock your reward!</i>`}
 
 🔗 <b>Your Referral Link:</b>
-<code>${refLink}</code>
+${refLink}
 
 👑 <b>Owner:</b> @BazzHacker963`;
 
@@ -134,15 +138,15 @@ bot.hears('📊 Check Status', async (ctx) => {
   }
 });
 
-// Button Listener: Share Link
+// Button Listener: Share Link (Fixes Clickable URL)
 bot.hears('🔗 Share Link', async (ctx) => {
   const userId = ctx.from.id;
   const botUsername = ctx.botInfo.username;
   const refLink = `https://t.me/${botUsername}?start=ref_${userId}`;
 
   ctx.reply(
-    `🚀 <b>Share your link with friends to get referrals:</b>\n\n<code>${refLink}</code>`, 
-    { parse_mode: 'HTML' }
+    `🚀 <b>Share your link with friends to get referrals:</b>\n\n${refLink}\n\n<i>Note: New users must open this link and click Start for your count to increase!</i>`, 
+    { parse_mode: 'HTML', disable_web_page_preview: true }
   );
 });
 
@@ -198,3 +202,4 @@ bot.command('stats', (ctx) => {
 });
 
 bot.launch().then(() => console.log('End JUTT Refer Bot is active!'));
+
