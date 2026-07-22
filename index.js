@@ -3,9 +3,9 @@ const { Telegraf, Markup } = require('telegraf');
 // ================= CONFIGURATION =================
 const BOT_TOKEN = 'YOUR_BOT_TOKEN_HERE'; // Replace with BotFather token
 const ADMIN_ID = 123456789; // Your numeric Telegram User ID
-const FORCE_CHANNEL = '@yourchannelusername'; // Must start with @ (Bot MUST be admin in channel!)
+const FORCE_CHANNEL = '@endjutt'; // Channel username (Bot MUST be admin in channel!)
 const IMAGE_URL = 'https://i.imgur.com/example.jpg'; // Direct link to your image (.jpg/.png)
-const LOCKED_LINK = 'https://t.me/yourchannelusername'; // Shown before 5 refs
+const LOCKED_LINK = 'https://t.me/endjutt'; // Target link shown before 5 referrals
 const UNLOCKED_LINK = 'https://t.me/your_secret_unlocked_link'; // Unlocked link after 5 refs
 // =================================================
 
@@ -55,6 +55,22 @@ const mainMenuKeyboard = Markup.keyboard([
   ['🎁 Get Target Link', '👨‍💻 Developer']
 ]).resize();
 
+// Helper: Show Force Join Message with Inline Buttons
+async function showForceJoinMessage(ctx) {
+  const cleanChannel = FORCE_CHANNEL.replace('@', '');
+  
+  const forceJoinKeyboard = Markup.inlineKeyboard([
+    [Markup.button.url('📢 Join Channel', `https://t.me/${cleanChannel}`)],
+    [Markup.button.callback('✅ Joined / Verify', 'check_subscription')]
+  ]);
+
+  return ctx.replyWithPhoto(IMAGE_URL, {
+    caption: `⚠️ <b>ACCESS DENIED!</b>\n\nWelcome <b>${ctx.from.first_name}</b>!\nTo use <b>End JUTT Refer Bot</b>, you must first join our channel: <b>${FORCE_CHANNEL}</b>.\n\nClick the button below to join, then tap <b>Verify</b>!`,
+    parse_mode: 'HTML',
+    ...forceJoinKeyboard
+  });
+}
+
 // /start Command
 bot.start(async (ctx) => {
   const userId = ctx.from.id;
@@ -69,13 +85,24 @@ bot.start(async (ctx) => {
   // Check Force Join Status
   const hasJoined = await isSubscribed(ctx, userId);
   if (!hasJoined) {
-    return ctx.replyWithPhoto(IMAGE_URL, {
-      caption: `⚠️ <b>ACCESS DENIED!</b>\n\nWelcome <b>${ctx.from.first_name}</b>!\nTo use <b>End JUTT Refer Bot</b>, you must first join our channel: <b>${FORCE_CHANNEL}</b>.\n\nAfter joining, send /start again!`,
-      parse_mode: 'HTML'
-    });
+    return showForceJoinMessage(ctx);
   }
 
   sendDashboard(ctx);
+});
+
+// Inline Callback Listener for Verify Button
+bot.action('check_subscription', async (ctx) => {
+  const userId = ctx.from.id;
+  const hasJoined = await isSubscribed(ctx, userId);
+
+  if (hasJoined) {
+    await ctx.answerCbQuery('✅ Membership Verified!');
+    await ctx.deleteMessage().catch(() => {}); // Delete force join message
+    sendDashboard(ctx);
+  } else {
+    await ctx.answerCbQuery('❌ You have not joined @endjutt yet!', { show_alert: true });
+  }
 });
 
 // Dashboard Renderer
@@ -124,7 +151,7 @@ bot.hears('📊 Check Status', async (ctx) => {
   const hasJoined = await isSubscribed(ctx, userId);
 
   if (!hasJoined) {
-    return ctx.reply(`⚠️ Please join ${FORCE_CHANNEL} first!`);
+    return showForceJoinMessage(ctx);
   }
 
   const userData = users[userId] || { referrals: 0 };
@@ -138,7 +165,7 @@ bot.hears('📊 Check Status', async (ctx) => {
   }
 });
 
-// Button Listener: Share Link (Fixes Clickable URL)
+// Button Listener: Share Link
 bot.hears('🔗 Share Link', async (ctx) => {
   const userId = ctx.from.id;
   const botUsername = ctx.botInfo.username;
